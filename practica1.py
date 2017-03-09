@@ -6,15 +6,20 @@ import csv
 class shorten(webapp.webApp):
     def __init__(self, hostname, port):
         self.counter = 0
+        self.urlString = ""
         self.urlDict, self.writer = self.initDic()
         webapp.webApp.__init__(self, hostname, port)
 
     def initDic(self):
-        f = open('dict.csv', 'r')
+        try:
+            f = open('dict.csv', 'r')
+        except FileNotFoundError:
+            f = open('dict.csv', 'w+')
         reader = csv.reader(f)
         urlDict = {}
         for row in reader:
-            urlDict[row[0]] = row[1]
+            urlDict[row[0]] = int(row[1])
+            self.urlString += "<p><a href='" + row[0] + "'>" + row[0] + "</a>: <a href='" + row[1] + "'>" + row[1] + "</a></p>"
             self.counter += 1
         f.close()
         fw = open('dict.csv', 'a')
@@ -23,12 +28,12 @@ class shorten(webapp.webApp):
 
     def parse(self, request):
         """Parse the received request, extracting the relevant information."""
-
+        request = request.replace("%2F",'/').replace("%3A", ':')
         return request.split()
 
     def findUrl(self, shortenUrl):
         for k, v in self.urlDict.items():
-            if v == shortenUrl:
+            if str(v) == shortenUrl:
                 return k
         return None
 
@@ -37,34 +42,38 @@ class shorten(webapp.webApp):
 
         Returns the HTTP code for the reply, and an HTML page.
         """
-
-        if parsedRequest[1] == "/dict":
-            print(self.urlDict)
-            return ("200 OK", "<html><body><h1>It works!</h1></body></html>")
+        if len(parsedRequest) == 0:
+            return ("404 Not Found", "<html><body><h1>Some error ocurred</h1></body></html>")
         if parsedRequest[1] == "/":
             if parsedRequest[0] == "GET":
                 return ("200 OK", "<html><body><form method='POST'>" +
                                     "<input type='text' name='url'>" +
-                                    "<input type='submit' value='Shorten'></form></body></html>")
+                                    "<input type='submit' value='Shorten'></form>" +
+                                    "<h1>URL disponibles: </h1>" +
+                                    self.urlString + "</body></html>")
             elif parsedRequest[0] == "POST":
+                url = None
                 for i in parsedRequest:
                     if i.startswith("url"):
                         url = i.split('=')[1]
                         break
+                if url == None:
+                    return ("404 Not Found", "<html><body><h1>We couldnt find your URL</h1></body></html>")
                 if not url.startswith("http://") and not url.startswith("https://"):
                     url = "http://" + url
                 if url in self.urlDict.keys():
                     return ("200 OK", "<html><body><p>URL: <a href='" + url +
                                         "'>" + url + "</a></p>" +
-                                        "<p>Shortened URL: <a href='" + url + "'>" +
+                                        "<p>Shortened URL: <a href='" + str(self.urlDict[url]) + "'>" +
                                         str(self.urlDict[url]) + "</a></p></body></html>")
                 else:
-                    self.urlDict[url] = self.counter
-                    #self.writer.writerow([url] + [str(self.counter)])
                     self.counter += 1
+                    self.urlDict[url] = self.counter
+                    self.urlString += "<p><a href='" + url + "'>" + url + "</a>: <a href='" + str(self.counter) + "'>" + str(self.counter) + "</a></p>"
+                    self.writer.writerow([url] + [str(self.counter)])
                     return ("200 OK", "<html><body><p>URL: <a href='" + url +
                                         "'>" + url + "</a></p>" +
-                                        "<p>Shortened URL: <a href='" + url + "'>" +
+                                        "<p>Shortened URL: <a href='" + str(self.counter) + "'>" +
                                         str(self.counter) + "</a></p></body></html>")
         else:
             url = self.findUrl(parsedRequest[1][1:])
@@ -72,13 +81,9 @@ class shorten(webapp.webApp):
                 return ("404 Not Found", "<html><body><h1>We couldnt find your URL</h1></body></html>")
             else:
                 return ("303 See Other", "<html><head><meta http-equiv='Refresh' " +
-                        "content='5;url=" + url + "'></head>" +
-                        "<body><p>Seras redireccionado en 5 segundos o si haces click " +
+                        "content='2;url=" + url + "'></head>" +
+                        "<body><p>Seras redireccionado a " + url + " en 2 segundos o si haces click " +
                         "<a href='" + url + "'>aqui</a></p></body></html>")
-
-
-
-        return ("200 OK", "<html><body><h1>It works!</h1></body></html>")
 
 
 if __name__ == '__main__':
